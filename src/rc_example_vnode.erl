@@ -20,7 +20,21 @@ start_vnode(I) ->
     riak_core_vnode_master:get_vnode_pid(I, ?MODULE).
 
 init([Partition]) ->
-    {ok, #{partition => Partition}}.
+    {ok, #{partition => Partition, data => #{}}}.
+
+handle_command({put, Key, Value}, _Sender, State = #{data := Data}) ->
+  log("PUT ~p:~p", [Key, Value], State),
+  NewData = Data#{Key => Value},
+  {reply, ok, State#{data => NewData}};
+
+handle_command({get, Key}, _Sender, State = #{data := Data}) ->
+  log("GET ~p", [Key], State),
+  {reply, maps:get(Key, Data, not_found), State};
+
+handle_command({delete, Key}, _Sender, State = #{data := Data}) ->
+  log("DELETE ~p", [Key], State),
+  NewData = maps:remove(Key, Data),
+  {reply, maps:get(Key, Data, not_found), State#{data => NewData}};
 
 handle_command(ping, _Sender, State = #{partition := Partition}) ->
   log("Received ping command ~p", [Partition], State),
