@@ -9,12 +9,13 @@ all() ->
    key_value_test].
 
 init_per_suite(Config) ->
-  Node1 = 'node1@127.0.0.1',
-  Node2 = 'node2@127.0.0.1',
-  Node3 = 'node3@127.0.0.1',
-  start_node(Node1, 8198, 8199),
-  start_node(Node2, 8298, 8299),
-  start_node(Node3, 8398, 8399),
+  %% Node1 = 'node1@127.0.0.1',
+  %% Node2 = 'node2@127.0.0.1',
+  %% Node3 = 'node3@127.0.0.1',
+  Host = "127.0.0.1",
+  Node1 = start_node("node1", Host, 8198, 8199),
+  Node2 = start_node("node2", Host, 8298, 8299),
+  Node3 = start_node("node3", Host, 8398, 8399),
 
   build_cluster(Node1, Node2, Node3),
 
@@ -79,28 +80,32 @@ key_value_test(Config) ->
 
  ok.
 
-start_node(NodeName, WebPort, HandoffPort) ->
+start_node(NodeName, Host, WebPort, HandoffPort) ->
   %% need to set the code path so the same modules are available in the slave
   CodePath = code:get_path(),
   PathFlag = "-pa " ++ lists:concat(lists:join(" ", CodePath)),
-  {ok, _} = ct_slave:start(NodeName, [{erl_flags, PathFlag}]),
+
+  {ok, _Peer, Node} = ?CT_PEER(["-name " ++ NodeName ++ "@"  ++ Host, PathFlag]),
 
   %% set the required environment for riak core
-  DataDir = "./data/" ++ atom_to_list(NodeName),
-  rpc:call(NodeName, application, load, [riak_core]),
-  rpc:call(NodeName, application, set_env, [riak_core, ring_state_dir, DataDir]),
-  rpc:call(NodeName, application, set_env, [riak_core, platform_data_dir, DataDir]),
-  rpc:call(NodeName, application, set_env, [riak_core, web_port, WebPort]),
-  rpc:call(NodeName, application, set_env, [riak_core, handoff_port, HandoffPort]),
-  rpc:call(NodeName, application, set_env, [riak_core, schema_dirs, ["../../lib/rc_example/priv"]]),
+  DataDir = "./data/" ++ NodeName,
+
+  %% Check the node is running
+  ok = rpc:call(Node, application, load, [riak_core]),
+  ok = rpc:call(Node, application, set_env, [riak_core, ring_state_dir, DataDir]),
+  ok = rpc:call(Node, application, set_env, [riak_core, platform_data_dir, DataDir]),
+  ok = rpc:call(Node, application, set_env, [riak_core, web_port, WebPort]),
+  ok = rpc:call(Node, application, set_env, [riak_core, handoff_port, HandoffPort]),
+  ok = rpc:call(Node, application, set_env, [riak_core, schema_dirs, ["../../lib/rc_example/priv"]]),
 
   %% start the rc_example app
-  {ok, _} = rpc:call(NodeName, application, ensure_all_started, [rc_example]),
+  {ok, _} = rpc:call(Node, application, ensure_all_started, [rc_example]),
 
-  ok.
+  Node.
+  %% ok.
 
 stop_node(NodeName) ->
-  ct_slave:stop(NodeName).
+  peer:stop(NodeName).
 
 build_cluster(Node1, Node2, Node3) ->
   rpc:call(Node2, riak_core, join, [Node1]),
