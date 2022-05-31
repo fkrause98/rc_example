@@ -13,4 +13,4 @@ clean_data:
 	rm -rf _build/dev1/rel/rc_example/data* ; rm -rf _build/dev2/rel/rc_example/data* ; rm -rf _build/dev3/rel/rc_example/data*
 
 test:
-	rebar3 ct --name test@127.0.0.1
+	rebar3 ct --name test@127.0.0.1 --verbose

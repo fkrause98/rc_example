@@ -9,9 +9,6 @@ all() ->
    key_value_test].
 
 init_per_suite(Config) ->
-  %% Node1 = 'node1@127.0.0.1',
-  %% Node2 = 'node2@127.0.0.1',
-  %% Node3 = 'node3@127.0.0.1',
   Host = "127.0.0.1",
   Node1 = start_node("node1", Host, 8198, 8199),
   Node2 = start_node("node2", Host, 8298, 8299),
@@ -83,14 +80,16 @@ key_value_test(Config) ->
 start_node(NodeName, Host, WebPort, HandoffPort) ->
   %% need to set the code path so the same modules are available in the slave
   CodePath = code:get_path(),
-  PathFlag = "-pa " ++ lists:concat(lists:join(" ", CodePath)),
+  PathFlag = lists:concat(lists:join(" ", CodePath)),
 
-  {ok, _Peer, Node} = ?CT_PEER(["-name " ++ NodeName ++ "@"  ++ Host, PathFlag]),
-
+  {ok, Node} = test_server:start_node(NodeName, peer, [{args, "-pa "++ PathFlag}, {wait, true}, {cleanup, true}]),
+  %% {ok, _Pid, Node} = peer:start(#{name => NodeName, host => Host, wait_boot => 5000, args => ["-pa ", PathFlag]}),
+  pong = net_adm:ping(Node),
   %% set the required environment for riak core
   DataDir = "./data/" ++ NodeName,
 
   %% Check the node is running
+  %% ok = rpc:call(Node, code, add_paths, [PathFlag]),
   ok = rpc:call(Node, application, load, [riak_core]),
   ok = rpc:call(Node, application, set_env, [riak_core, ring_state_dir, DataDir]),
   ok = rpc:call(Node, application, set_env, [riak_core, platform_data_dir, DataDir]),
@@ -105,7 +104,7 @@ start_node(NodeName, Host, WebPort, HandoffPort) ->
   %% ok.
 
 stop_node(NodeName) ->
-  peer:stop(NodeName).
+  test_server:stop_node(NodeName).
 
 build_cluster(Node1, Node2, Node3) ->
   rpc:call(Node2, riak_core, join, [Node1]),
