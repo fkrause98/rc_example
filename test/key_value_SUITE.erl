@@ -9,10 +9,10 @@ all() ->
    key_value_test].
 
 init_per_suite(Config) ->
-  Host = "127.0.0.1",
-  Node1 = start_node("node1", Host, 8198, 8199),
-  Node2 = start_node("node2", Host, 8298, 8299),
-  Node3 = start_node("node3", Host, 8398, 8399),
+  %% Host = "127.0.0.1",
+  Node1 = start_node(8198, 8199),
+  Node2 = start_node(8298, 8299),
+  Node3 = start_node(8398, 8399),
 
   build_cluster(Node1, Node2, Node3),
 
@@ -30,9 +30,10 @@ end_per_suite(Config) ->
   ok.
 
 ping_test(Config) ->
- Node1 = ?config(node1, Config),
- Node2 = ?config(node2, Config),
- Node3 = ?config(node3, Config),
+  Host = "127.0.0.1",
+  Node1 = ?config(node1, Config),
+  Node2 = ?config(node2, Config),
+  Node3 = ?config(node3, Config),
 
  {pong, _Partition1} = rc_command(Node1, ping),
  {pong, _Partition2} = rc_command(Node2, ping),
@@ -77,31 +78,29 @@ key_value_test(Config) ->
 
  ok.
 
-start_node(NodeName, Host, WebPort, HandoffPort) ->
-  %% need to set the code path so the same modules are available in the slave
-  CodePath = code:get_path(),
-  PathFlag = lists:concat(lists:join(" ", CodePath)),
+start_node(WebPort, HandoffPort) ->
+    %% need to set the code path so the same modules are available in the slave
+    CodePath = code:get_path(),
+    PathFlag = lists:concat(lists:join(" ", CodePath)),
 
-  {ok, Node} = test_server:start_node(NodeName, peer, [{args, "-pa "++ PathFlag}, {wait, true}, {cleanup, true}]),
-  %% {ok, _Pid, Node} = peer:start(#{name => NodeName, host => Host, wait_boot => 5000, args => ["-pa ", PathFlag]}),
-  pong = net_adm:ping(Node),
-  %% set the required environment for riak core
-  DataDir = "./data/" ++ NodeName,
+    {ok, Peer, Node} = ?CT_PEER(["-pa"|code:get_path()]),
+    unlink(Peer),
+    DataDir = "./data/" ++ peer:random_name(),
 
-  %% Check the node is running
-  %% ok = rpc:call(Node, code, add_paths, [PathFlag]),
-  ok = rpc:call(Node, application, load, [riak_core]),
-  ok = rpc:call(Node, application, set_env, [riak_core, ring_state_dir, DataDir]),
-  ok = rpc:call(Node, application, set_env, [riak_core, platform_data_dir, DataDir]),
-  ok = rpc:call(Node, application, set_env, [riak_core, web_port, WebPort]),
-  ok = rpc:call(Node, application, set_env, [riak_core, handoff_port, HandoffPort]),
-  ok = rpc:call(Node, application, set_env, [riak_core, schema_dirs, ["../../lib/rc_example/priv"]]),
+    %% Check the node is running
+    %% ok = rpc:call(Node, code, add_paths, [PathFlag]),
+    ok = rpc:call(Node, application, load, [riak_core]),
+    ok = rpc:call(Node, application, set_env, [riak_core, ring_state_dir, DataDir]),
+    ok = rpc:call(Node, application, set_env, [riak_core, platform_data_dir, DataDir]),
+    ok = rpc:call(Node, application, set_env, [riak_core, web_port, WebPort]),
+    ok = rpc:call(Node, application, set_env, [riak_core, handoff_port, HandoffPort]),
+    ok = rpc:call(Node, application, set_env, [riak_core, schema_dirs, ["../../lib/rc_example/priv"]]),
 
-  %% start the rc_example app
-  {ok, _} = rpc:call(Node, application, ensure_all_started, [rc_example]),
+    %% start the rc_example app
+    {ok, _} = rpc:call(Node, application, ensure_all_started, [rc_example]),
 
-  Node.
-  %% ok.
+    Node.
+%% ok.
 
 stop_node(NodeName) ->
   test_server:stop_node(NodeName).
