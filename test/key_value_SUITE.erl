@@ -9,28 +9,20 @@ all() ->
    key_value_test].
 
 init_per_suite(Config) ->
-  %% Host = "127.0.0.1",
-  Node1 = start_node(8198, 8199),
-  Node2 = start_node(8298, 8299),
-  Node3 = start_node(8398, 8399),
+    Host = "127.0.0.1",
+    Node1 = start_node('node1', Host, 8198, 8199),
+    Node2 = start_node('node2', Host, 8298, 8299),
+    Node3 = start_node('node3', Host, 8398, 8399),
 
-  build_cluster(Node1, Node2, Node3),
+    build_cluster(Node1, Node2, Node3),
 
-  [{node1, Node1},
-   {node2, Node2},
-   {node3, Node3} | Config].
+    [{node1, Node1},
+     {node2, Node2},
+     {node3, Node3} | Config].
 
-end_per_suite(Config) ->
-  Node1 = ?config(node1, Config),
-  Node2 = ?config(node2, Config),
-  Node3 = ?config(node3, Config),
-  stop_node(Node1),
-  stop_node(Node2),
-  stop_node(Node3),
-  ok.
+end_per_suite(_) -> ok.
 
 ping_test(Config) ->
-  Host = "127.0.0.1",
   Node1 = ?config(node1, Config),
   Node2 = ?config(node2, Config),
   Node3 = ?config(node3, Config),
@@ -78,17 +70,19 @@ key_value_test(Config) ->
 
  ok.
 
-start_node(WebPort, HandoffPort) ->
-    %% need to set the code path so the same modules are available in the slave
+start_node(Name, Host, WebPort, HandoffPort) ->
+    %% Need to set the code path so the same modules are available in the slave
     CodePath = code:get_path(),
-    PathFlag = lists:concat(lists:join(" ", CodePath)),
-
-    {ok, Peer, Node} = ?CT_PEER(["-pa"|code:get_path()]),
+    %% Arguments to set up the node
+    NodeArgs = #{name => Name, host => Host, args => ["-pa" | CodePath]},
+    %% Since OTP 25, ct_slaves nodes are deprecated
+    %% (and to be removed in OTP 27), so we're
+    %% using peer nodes instead, with the CT_PEER macro.
+    {ok, Peer, Node} = ?CT_PEER(NodeArgs),
     unlink(Peer),
-    DataDir = "./data/" ++ peer:random_name(),
+    DataDir = "./data/" ++ atom_to_list(Name),
 
-    %% Check the node is running
-    %% ok = rpc:call(Node, code, add_paths, [PathFlag]),
+    %% set the required environment for riak core
     ok = rpc:call(Node, application, load, [riak_core]),
     ok = rpc:call(Node, application, set_env, [riak_core, ring_state_dir, DataDir]),
     ok = rpc:call(Node, application, set_env, [riak_core, platform_data_dir, DataDir]),
@@ -100,10 +94,6 @@ start_node(WebPort, HandoffPort) ->
     {ok, _} = rpc:call(Node, application, ensure_all_started, [rc_example]),
 
     Node.
-%% ok.
-
-stop_node(NodeName) ->
-  test_server:stop_node(NodeName).
 
 build_cluster(Node1, Node2, Node3) ->
   rpc:call(Node2, riak_core, join, [Node1]),
