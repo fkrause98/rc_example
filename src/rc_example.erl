@@ -4,7 +4,9 @@
          ring_status/0,
          put/2,
          get/1,
-         delete/1]).
+         delete/1,
+         keys/0,
+         values/0]).
 
 ping() ->
   sync_command(os:timestamp(), ping).
@@ -21,6 +23,11 @@ get(Key) ->
 
 delete(Key) ->
   sync_command(Key, {delete, Key}).
+keys() ->
+  coverage_command(keys).
+
+values() ->
+  coverage_command(values).
 
 %% internal
 hash_key(Key) ->
@@ -32,3 +39,12 @@ sync_command(Key, Command) ->
   [IndexNode] = PrefList,
   io:format("Index Node: ~p", [IndexNode]),
   riak_core_vnode_master:sync_spawn_command(IndexNode, Command, rc_example_vnode_master).
+
+coverage_command(Command) ->
+  Timeout = 5000,
+  ReqId = erlang:phash2(erlang:monotonic_time()),
+  {ok, _} = rc_example_coverage_fsm_sup:start_fsm([ReqId, self(), Command, Timeout]),
+
+  receive
+    {ReqId, Val} -> Val
+  end.
