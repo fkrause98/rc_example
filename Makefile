@@ -1,5 +1,7 @@
 .PHONY: dev1 dev2 dev3 clean_data test
 
+default:
+	rebar3 release
 dev1:
 	rebar3 as dev1 release && _build/dev1/rel/rc_example/bin/rc_example
 
